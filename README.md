@@ -1,2 +1,1 @@
-# bafafa-social
-Rede Social Brasileira
+# Bafafá - Uma rede social brasileira :brazil:
