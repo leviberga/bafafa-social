@@ -1,5 +1,6 @@
 package com.leviberga.bafafa.identity.infra;
 
+import com.leviberga.bafafa.identity.application.TokenHashing;
 import com.leviberga.bafafa.identity.application.TokenIssuer;
 import com.leviberga.bafafa.identity.domain.RefreshToken;
 import com.leviberga.bafafa.identity.domain.RefreshTokenRepository;
@@ -10,15 +11,10 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.HexFormat;
 import java.util.UUID;
 
 @Component
@@ -57,17 +53,9 @@ class JwtTokenIssuer implements TokenIssuer {
 
         Instant now = clock.instant();
         Instant expiresAt = now.plus(props.refreshTokenTtl());
-        refreshTokens.save(RefreshToken.issue(accountId, familyId, sha256(raw), expiresAt, now));
+        refreshTokens.save(RefreshToken.issue(accountId, familyId, TokenHashing.sha256(raw), expiresAt, now));
 
         return new RefreshTokenGrant(raw, expiresAt);
     }
 
-    static String sha256(String raw) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
 }

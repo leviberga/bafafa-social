@@ -1,6 +1,10 @@
 package com.leviberga.bafafa.identity.web;
 
+import com.leviberga.bafafa.identity.application.AuthSession;
+import com.leviberga.bafafa.identity.application.InvalidRefreshTokenException;
 import com.leviberga.bafafa.identity.application.LoginService;
+import com.leviberga.bafafa.identity.application.LogoutService;
+import com.leviberga.bafafa.identity.application.RefreshSessionService;
 import com.leviberga.bafafa.identity.application.RegisterAccount;
 import com.leviberga.bafafa.identity.application.TokenIssuer;
 import com.leviberga.bafafa.identity.domain.Account;
@@ -9,14 +13,16 @@ import com.leviberga.bafafa.identity.web.AuthDtos.AccountResponse;
 import com.leviberga.bafafa.identity.web.AuthDtos.AuthResponse;
 import com.leviberga.bafafa.identity.web.AuthDtos.LoginRequest;
 import com.leviberga.bafafa.identity.web.AuthDtos.RegisterRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,18 +40,24 @@ import java.util.UUID;
 class AuthController {
 
     private static final String REFRESH_COOKIE = "bafafa_refresh";
+    private static final String COOKIE_PATH = "/api/v1/auth";
 
     private final RegisterAccount registerAccount;
     private final LoginService loginService;
+    private final RefreshSessionService refreshSessionService;
+    private final LogoutService logoutService;
     private final AccountRepository accounts;
     private final Clock clock;
     private final boolean cookieSecure;
 
     AuthController(RegisterAccount registerAccount, LoginService loginService,
+                   RefreshSessionService refreshSessionService, LogoutService logoutService,
                    AccountRepository accounts, Clock clock,
                    @Value("${bafafa.auth.refresh-cookie-secure:true}") boolean cookieSecure) {
         this.registerAccount = registerAccount;
         this.loginService = loginService;
+        this.refreshSessionService = refreshSessionService;
+        this.logoutService = logoutService;
         this.accounts = accounts;
         this.clock = clock;
         this.cookieSecure = cookieSecure;
@@ -60,10 +72,33 @@ class AuthController {
     }
 
     @PostMapping("/login")
-    AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
-        LoginService.Result result = loginService.execute(request.identifier(), request.password());
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie(result.refreshToken()).toString());
-        return AuthResponse.of(result.accessToken().value(), result.accessToken().expiresAt(), clock.instant());
+    ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        AuthSession session = loginService.execute(request.identifier(), request.password());
+        return sessionResponse(session);
+    }
+
+    @PostMapping("/refresh")
+    ResponseEntity<?> refresh(@CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
+        try {
+            if (refreshToken == null) {
+                throw new InvalidRefreshTokenException();
+            }
+            return sessionResponse(refreshSessionService.execute(refreshToken));
+        } catch (InvalidRefreshTokenException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .header(HttpHeaders.SET_COOKIE, clearedRefreshCookie().toString())
+                    .body(ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada."));
+        }
+    }
+
+    @PostMapping("/logout")
+    ResponseEntity<Void> logout(@CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
+        if (refreshToken != null) {
+            logoutService.execute(refreshToken);
+        }
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, clearedRefreshCookie().toString())
+                .build();
     }
 
     @GetMapping("/me")
@@ -74,13 +109,31 @@ class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
     }
 
+    private ResponseEntity<AuthResponse> sessionResponse(AuthSession session) {
+        AuthResponse body = AuthResponse.of(
+                session.accessToken().value(), session.accessToken().expiresAt(), clock.instant());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie(session.refreshToken()).toString())
+                .body(body);
+    }
+
     private ResponseCookie refreshCookie(TokenIssuer.RefreshTokenGrant grant) {
         return ResponseCookie.from(REFRESH_COOKIE, grant.value())
                 .httpOnly(true)
                 .secure(cookieSecure)
                 .sameSite("Strict")
-                .path("/api/v1/auth")
+                .path(COOKIE_PATH)
                 .maxAge(Duration.between(clock.instant(), grant.expiresAt()))
+                .build();
+    }
+
+    private ResponseCookie clearedRefreshCookie() {
+        return ResponseCookie.from(REFRESH_COOKIE, "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Strict")
+                .path(COOKIE_PATH)
+                .maxAge(0)
                 .build();
     }
 }

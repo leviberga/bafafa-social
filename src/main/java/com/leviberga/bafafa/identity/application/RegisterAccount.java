@@ -5,6 +5,7 @@ import com.leviberga.bafafa.identity.domain.Account;
 import com.leviberga.bafafa.identity.domain.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,10 +34,27 @@ public class RegisterAccount {
             throw new AccountConflictException("handle");
         }
 
-        Account account = accounts.save(Account.register(
-                normalizedEmail, normalizedHandle, passwordEncoder.encode(password), clock.instant()));
+        Account account;
+        try {
+            account = accounts.saveAndFlush(Account.register(
+                    normalizedEmail, normalizedHandle, passwordEncoder.encode(password), clock.instant()));
+        } catch (DataIntegrityViolationException ex) {
+            throw new AccountConflictException(conflictingField(ex));
+        }
 
         events.publishEvent(new AccountRegistered(account.getId(), account.getHandle(), displayName.trim()));
         return account;
     }
+
+    private static String conflictingField(DataIntegrityViolationException ex) {
+        String message = String.valueOf(ex.getMostSpecificCause().getMessage());
+        if (message.contains("uq_account_handle")) {
+            return "handle";
+        }
+        if (message.contains("uq_account_email")) {
+            return "e-mail";
+        }
+        return "e-mail ou handle";
+    }
+
 }

@@ -29,7 +29,7 @@ public class LoginService {
     }
 
     @Transactional
-    public Result execute(String identifier, String password) {
+    public AuthSession execute(String identifier, String password) {
         String id = identifier.trim().toLowerCase(Locale.ROOT);
         Optional<Account> found = id.contains("@") ? accounts.findByEmail(id) : accounts.findByHandle(id);
 
@@ -41,7 +41,7 @@ public class LoginService {
         }
 
         Account account = found.get();
-        return new Result(
+        return new AuthSession(
                 tokens.issueAccessToken(account.getId()),
                 tokens.issueRefreshToken(account.getId(), UUID.randomUUID()));
     }
