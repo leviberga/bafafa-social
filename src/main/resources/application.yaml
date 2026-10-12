@@ -1,4 +1,7 @@
 spring:
+  modulith:
+    events:
+      republish-outstading-events-on-restart: true
   jpa:
     hibernate:
       ddl-auto: validate
