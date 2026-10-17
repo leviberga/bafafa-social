@@ -1,4 +1,8 @@
 spring:
+  data:
+    mongodb:
+      database: bafafa
+      auto-index-creation: true
   modulith:
     events:
       republish-outstading-events-on-restart: true

@@ -1,2 +1,2 @@
-@org.springframework.modulith.ApplicationModule
+@org.springframework.modulith.ApplicationModule(allowedDependencies = "identity")
 package com.leviberga.bafafa.post;
