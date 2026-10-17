@@ -4,12 +4,15 @@ import com.leviberga.bafafa.identity.AccountSummary;
 import com.leviberga.bafafa.identity.IdentityApi;
 import com.leviberga.bafafa.post.domain.Post;
 import com.leviberga.bafafa.post.domain.PostRepository;
+import com.leviberga.bafafa.ratelimit.RateLimitPolicy;
+import com.leviberga.bafafa.ratelimit.RateLimiter;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -19,19 +22,27 @@ import java.util.UUID;
 public class PostService {
 
     private static final int MAX_LIMIT = 100;
+    private static final RateLimitPolicy CREATE_POLICY = new RateLimitPolicy(10, Duration.ofMinutes(1));
+    private static final RateLimitPolicy REPLY_POLICY = new RateLimitPolicy(30, Duration.ofMinutes(1));
+
 
     private final PostRepository posts;
     private final IdentityApi identity;
     private final Clock clock;
+    private final RateLimiter rateLimiter;
+
+
 
     public record PostPage(List<Post> items, String nextCursor) {
     }
 
     public Post create(UUID authorId, String text) {
+        rateLimiter.acquire("post:create:" + authorId, CREATE_POLICY);
         return posts.save(Post.create(authorId.toString(), text.trim(), clock.instant()));
     }
 
     public Post reply(UUID authorId, String parentId, String text) {
+        rateLimiter.acquire("post:reply:" + authorId, REPLY_POLICY);
         Post parent = findVisible(parentId);
         return posts.save(Post.reply(authorId.toString(), parent, text.trim(), clock.instant()));
     }

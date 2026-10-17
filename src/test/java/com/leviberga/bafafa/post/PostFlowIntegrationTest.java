@@ -16,8 +16,7 @@ import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -149,6 +148,28 @@ class PostFlowIntegrationTest {
         User author = newUser();
         mvc.perform(get("/api/v1/posts").param("author", author.handle()).param("cursor", "lixo"))
                 .andExpect(status().isBadRequest());
+    }
+    @Test
+    void rateLimitIsPerUserAndPerAction() throws Exception {
+        User spammer = newUser();
+        User other = newUser();
+        String othersPostId = createPost(other, "post de outra pessoa");
+
+        for (int i = 0; i < 10; i++) {
+            createPost(spammer, "post " + i);
+        }
+
+        mvc.perform(post("/api/v1/posts")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + spammer.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"text":"um a mais"}
+                            """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER));
+
+        reply(spammer, othersPostId, "mas ainda posso responder");
+        createPost(other, "eu ainda posso postar");
     }
 
     // --- helpers ---
