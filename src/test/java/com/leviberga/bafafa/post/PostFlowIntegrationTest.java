@@ -3,17 +3,24 @@ package com.leviberga.bafafa.post;
 import com.jayway.jsonpath.JsonPath;
 import com.leviberga.bafafa.TestClient;
 import com.leviberga.bafafa.TestcontainersConfiguration;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static com.mongodb.assertions.Assertions.assertNotNull;
+import static com.mongodb.assertions.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -26,6 +33,12 @@ class PostFlowIntegrationTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    StringRedisTemplate redis;
+
+    @Autowired
+    MongoTemplate mongo;
 
     private record User(String handle, String token) {
     }
@@ -93,7 +106,6 @@ class PostFlowIntegrationTest {
                 .andExpect(jsonPath("$.parentId").value(firstReplyId))
                 .andExpect(jsonPath("$.rootId").value(rootId));
 
-        // As respostas diretas do post raiz são só a primeira.
         mvc.perform(get("/api/v1/posts/" + rootId + "/replies"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
@@ -176,6 +188,42 @@ class PostFlowIntegrationTest {
 
         reply(spammer, othersPostId, "mas ainda posso responder");
         createPost(other, "eu ainda posso postar");
+    }
+    @Test
+    void readsAreServedFromRedisAfterTheFirstHit() throws Exception {
+        User author = newUser();
+        String postId = createPost(author, "post popular");
+        String cacheKey = "post:v1:" + postId;
+
+        assertNull(redis.opsForValue().get(cacheKey));
+
+        mvc.perform(get("/api/v1/posts/" + postId)).andExpect(status().isOk());
+        assertNotNull(redis.opsForValue().get(cacheKey));
+
+        mongo.remove(Query.query(Criteria.where("_id").is(new ObjectId(postId))), "posts");
+        mvc.perform(get("/api/v1/posts/" + postId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.text").value("post popular"));
+
+        redis.delete(cacheKey);
+        mvc.perform(get("/api/v1/posts/" + postId)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deletingAPostEvictsItFromTheCache() throws Exception {
+        User author = newUser();
+        String postId = createPost(author, "efêmero");
+        String cacheKey = "post:v1:" + postId;
+
+        mvc.perform(get("/api/v1/posts/" + postId)).andExpect(status().isOk());
+        assertNotNull(redis.opsForValue().get(cacheKey));
+
+        mvc.perform(delete("/api/v1/posts/" + postId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + author.token()))
+                .andExpect(status().isNoContent());
+
+        assertNull(redis.opsForValue().get(cacheKey));
+        mvc.perform(get("/api/v1/posts/" + postId)).andExpect(status().isNotFound());
     }
 
     // --- helpers ---

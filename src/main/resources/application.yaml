@@ -22,3 +22,6 @@ bafafa:
       register-per-ip:   { capacity: 5,  period: 1h }
       login-per-ip:      { capacity: 20, period: 1m }
       login-per-account: { capacity: 5,  period: 1m }
+  post:
+    cache:
+      ttl: 10m

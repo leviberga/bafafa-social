@@ -51,6 +51,18 @@ public class Post {
         post.createdAt = now;
         return post;
     }
+    public static Post restore(ObjectId id, String authorId, PostType type, ObjectId parentId,
+                               ObjectId rootId, String text, Instant createdAt) {
+        Post post = new Post();
+        post.id = id;
+        post.authorId = authorId;
+        post.type = type;
+        post.parentId = parentId;
+        post.rootId = rootId;
+        post.text = text;
+        post.createdAt = createdAt;
+        return post;
+    }
 
     public void markDeleted(Instant now) {
         this.deletedAt = now;

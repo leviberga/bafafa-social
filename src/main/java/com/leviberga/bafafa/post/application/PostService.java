@@ -30,6 +30,7 @@ public class PostService {
     private final IdentityApi identity;
     private final Clock clock;
     private final RateLimiter rateLimiter;
+    private final PostCache cache;
 
 
 
@@ -43,25 +44,26 @@ public class PostService {
 
     public Post reply(UUID authorId, String parentId, String text) {
         rateLimiter.acquire("post:reply:" + authorId, REPLY_POLICY);
-        Post parent = findVisible(parentId);
+        Post parent = findVisibleCached(parentId);
         return posts.save(Post.reply(authorId.toString(), parent, text.trim(), clock.instant()));
     }
 
     public Post get(String id) {
-        return findVisible(id);
+        return findVisibleCached(id);
     }
 
     public void delete(UUID requesterId, String id) {
-        Post post = findVisible(id);
+        Post post = findVisible(id); // direto do banco: decisão de autorização não usa cache
         if (!post.getAuthorId().equals(requesterId.toString())) {
             throw new PostErrors.NotOwner();
         }
         post.markDeleted(clock.instant());
         posts.save(post);
+        cache.evict(post.getId());
     }
 
     public PostPage listReplies(String postId, String cursor, int limit) {
-        Post parent = findVisible(postId);
+        Post parent = findVisibleCached(postId);
         int size = clamp(limit);
         Limit fetch = Limit.of(size + 1); // um a mais, só para saber se existe próxima página
 
@@ -86,11 +88,21 @@ public class PostService {
         return toPage(found, size);
     }
 
+    private Post findVisibleCached(String id) {
+        ObjectId objectId = parseObjectId(id);
+        return cache.find(objectId).orElseGet(() -> {
+            Post post = loadVisible(objectId);
+            cache.put(post);
+            return post;
+        });
+    }
+
     private Post findVisible(String id) {
-        if (!ObjectId.isValid(id)) {
-            throw new PostErrors.PostNotFound();
-        }
-        return posts.findById(new ObjectId(id))
+        return loadVisible(parseObjectId(id));
+    }
+
+    private Post loadVisible(ObjectId id) {
+        return posts.findById(id)
                 .filter(post -> post.getDeletedAt() == null)
                 .orElseThrow(PostErrors.PostNotFound::new);
     }
@@ -108,6 +120,12 @@ public class PostService {
             throw new PostErrors.InvalidCursor();
         }
         return new ObjectId(cursor);
+    }
+    private static ObjectId parseObjectId(String id) {
+        if (!ObjectId.isValid(id)) {
+            throw new PostErrors.PostNotFound();
+        }
+        return new ObjectId(id);
     }
 
     private static int clamp(int limit) {

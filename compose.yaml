@@ -19,6 +19,7 @@ services:
 
   redis:
     image: redis:7
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lfu"]
     ports:
       - "6379:6379"
 
