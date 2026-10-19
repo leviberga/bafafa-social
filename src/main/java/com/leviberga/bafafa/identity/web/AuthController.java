@@ -1,12 +1,6 @@
 package com.leviberga.bafafa.identity.web;
 
-import com.leviberga.bafafa.identity.application.AuthSession;
-import com.leviberga.bafafa.identity.application.InvalidRefreshTokenException;
-import com.leviberga.bafafa.identity.application.LoginService;
-import com.leviberga.bafafa.identity.application.LogoutService;
-import com.leviberga.bafafa.identity.application.RefreshSessionService;
-import com.leviberga.bafafa.identity.application.RegisterAccount;
-import com.leviberga.bafafa.identity.application.TokenIssuer;
+import com.leviberga.bafafa.identity.application.*;
 import com.leviberga.bafafa.identity.domain.Account;
 import com.leviberga.bafafa.identity.domain.AccountRepository;
 import com.leviberga.bafafa.identity.web.AuthDtos.AccountResponse;
@@ -30,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -49,10 +44,11 @@ class AuthController {
     private final AccountRepository accounts;
     private final Clock clock;
     private final boolean cookieSecure;
+    private final AuthRateLimits rateLimits;
 
     AuthController(RegisterAccount registerAccount, LoginService loginService,
                    RefreshSessionService refreshSessionService, LogoutService logoutService,
-                   AccountRepository accounts, Clock clock,
+                   AccountRepository accounts, Clock clock, AuthRateLimits rateLimits,
                    @Value("${bafafa.auth.refresh-cookie-secure:true}") boolean cookieSecure) {
         this.registerAccount = registerAccount;
         this.loginService = loginService;
@@ -60,19 +56,22 @@ class AuthController {
         this.logoutService = logoutService;
         this.accounts = accounts;
         this.clock = clock;
+        this.rateLimits = rateLimits;
         this.cookieSecure = cookieSecure;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    AccountResponse register(@Valid @RequestBody RegisterRequest request) {
+    AccountResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
+        rateLimits.beforeRegister(http.getRemoteAddr());
         Account account = registerAccount.execute(
                 request.email(), request.password(), request.handle(), request.displayName());
         return AccountResponse.from(account);
     }
 
     @PostMapping("/login")
-    ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+    ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+        rateLimits.beforeLogin(http.getRemoteAddr(), request.identifier());
         AuthSession session = loginService.execute(request.identifier(), request.password());
         return sessionResponse(session);
     }

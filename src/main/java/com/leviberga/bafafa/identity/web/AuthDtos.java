@@ -23,7 +23,8 @@ final class AuthDtos {
             @NotBlank @Size(max = 50) String displayName) {
     }
 
-    record LoginRequest(@NotBlank String identifier, @NotBlank String password) {
+    record LoginRequest(@NotBlank @Size(max = 254) String identifier,
+                        @NotBlank @Size(max = 72) String password) {
     }
 
     record AuthResponse(String accessToken, String tokenType, long expiresIn) {

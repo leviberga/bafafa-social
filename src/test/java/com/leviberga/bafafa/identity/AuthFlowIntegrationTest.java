@@ -1,6 +1,7 @@
 package com.leviberga.bafafa.identity;
 
 import com.jayway.jsonpath.JsonPath;
+import com.leviberga.bafafa.TestClient;
 import com.leviberga.bafafa.TestcontainersConfiguration;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
@@ -97,6 +98,7 @@ class AuthFlowIntegrationTest {
 
     private ResultActions register(String email, String handle) throws Exception {
         return mvc.perform(post("/api/v1/auth/register")
+                .with(TestClient.newIp())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"email":"%s","password":"senha-forte-123","handle":"%s","displayName":"Teste"}
@@ -105,6 +107,7 @@ class AuthFlowIntegrationTest {
 
     private ResultActions login(String identifier, String password) throws Exception {
         return mvc.perform(post("/api/v1/auth/login")
+                .with(TestClient.newIp())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"identifier":"%s","password":"%s"}

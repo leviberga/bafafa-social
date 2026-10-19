@@ -18,3 +18,7 @@ bafafa:
     access-token-ttl: 15m
     refresh-token-ttl: 30d
     refresh-cookie-secure: false
+    rate-limit:
+      register-per-ip:   { capacity: 5,  period: 1h }
+      login-per-ip:      { capacity: 20, period: 1m }
+      login-per-account: { capacity: 5,  period: 1m }

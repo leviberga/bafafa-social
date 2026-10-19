@@ -1,6 +1,7 @@
 package com.leviberga.bafafa.post;
 
 import com.jayway.jsonpath.JsonPath;
+import com.leviberga.bafafa.TestClient;
 import com.leviberga.bafafa.TestcontainersConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +45,7 @@ class PostFlowIntegrationTest {
     @Test
     void creatingPostRequiresAuthentication() throws Exception {
         mvc.perform(post("/api/v1/posts")
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"text":"sem login"}
@@ -57,6 +59,7 @@ class PostFlowIntegrationTest {
 
         mvc.perform(post("/api/v1/posts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + author.token())
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"text":"   "}
@@ -65,6 +68,7 @@ class PostFlowIntegrationTest {
 
         mvc.perform(post("/api/v1/posts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + author.token())
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"text\":\"" + "a".repeat(281) + "\"}"))
                 .andExpect(status().isBadRequest());
@@ -79,6 +83,7 @@ class PostFlowIntegrationTest {
 
         mvc.perform(post("/api/v1/posts/" + firstReplyId + "/replies")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + author.token())
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"text":"resposta da resposta"}
@@ -161,6 +166,7 @@ class PostFlowIntegrationTest {
 
         mvc.perform(post("/api/v1/posts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + spammer.token())
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                             {"text":"um a mais"}
@@ -177,6 +183,7 @@ class PostFlowIntegrationTest {
     private User newUser() throws Exception {
         String id = "user_" + UUID.randomUUID().toString().substring(0, 8);
         mvc.perform(post("/api/v1/auth/register")
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s@exemplo.com","password":"senha-forte-123","handle":"%s","displayName":"Teste"}
@@ -184,6 +191,7 @@ class PostFlowIntegrationTest {
                 .andExpect(status().isCreated());
 
         String body = mvc.perform(post("/api/v1/auth/login")
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"identifier":"%s","password":"senha-forte-123"}
@@ -196,6 +204,7 @@ class PostFlowIntegrationTest {
     private String createPost(User user, String text) throws Exception {
         String body = mvc.perform(post("/api/v1/posts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + user.token())
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"text":"%s"}
@@ -208,6 +217,7 @@ class PostFlowIntegrationTest {
     private String reply(User user, String parentId, String text) throws Exception {
         String body = mvc.perform(post("/api/v1/posts/" + parentId + "/replies")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + user.token())
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"text":"%s"}

@@ -1,6 +1,7 @@
 package com.leviberga.bafafa.profile;
 
 import com.jayway.jsonpath.JsonPath;
+import com.leviberga.bafafa.TestClient;
 import com.leviberga.bafafa.TestcontainersConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -86,6 +87,7 @@ class ProfileFlowIntegrationTest {
 
     private ResultActions register(String id) throws Exception {
         return mvc.perform(post("/api/v1/auth/register")
+                .with(TestClient.newIp())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"email":"%s@exemplo.com","password":"senha-forte-123","handle":"%s","displayName":"Teste"}
@@ -94,6 +96,7 @@ class ProfileFlowIntegrationTest {
 
     private String accessToken(String id) throws Exception {
         String body = mvc.perform(post("/api/v1/auth/login")
+                        .with(TestClient.newIp())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"identifier":"%s","password":"senha-forte-123"}
