@@ -29,6 +29,8 @@ Um único deployável, dividido em módulos que só conversam por APIs públicas
 flowchart LR
     post --> identity
     post --> ratelimit
+    engagement --> post
+    engagement --> ratelimit
     profile --> identity
     identity -. AccountRegistered .-> profile
 ```
@@ -39,6 +41,7 @@ flowchart LR
 | `profile` | Perfil público (nome de exibição, bio), criado por evento | PostgreSQL (schema `profile`) |
 | `post` | Posts e respostas, paginação por cursor | MongoDB (coleção `posts`) |
 | `ratelimit` | Limitação de taxa por usuário e ação | Redis |
+| `engagement` | Curtidas e contadores | MongoDB (coleção `likes`) |
 
 Regras de convivência:
 
@@ -84,6 +87,9 @@ Estrutura de cada módulo (versão leve de arquitetura hexagonal, com pureza só
 
 **Rate limiting.** Token bucket com recarga contínua, implementado em **script Lua no Redis**, o que o torna atômico e compartilhável entre várias instâncias da aplicação. A chave é por usuário e por ação (postar não consome o limite de responder), o relógio usado é o do próprio Redis (sem *clock skew* entre instâncias) e as chaves expiram sozinhas. Ao exceder o limite, a resposta é `429` com `Retry-After`. Limites atuais: 10 posts por minuto e 30 respostas por minuto, por usuário. Se o Redis estiver indisponível, o limiter deixa passar (*fail-open*) e registra um aviso: para posts, disponibilidade pesa mais que rigor.
 
+**Limite por IP em login e cadastro.** Três baldes configuráveis `(bafafa.auth.rate-limit.*)`: cadastro por IP, login por IP e login por conta. O de IP freia varredura de muitas contas; o de conta freia força bruta contra um alvo, mesmo vinda de vários IPs. Trade-offs assumidos: o limite por conta conta toda tentativa, então permite "trancar" o login de alguém por até um minuto, e IPs compartilhados dividem o balde de cadastro. Atrás de proxy, é preciso `server.forward-headers-strategy: native` para enxergar o IP real.
+
+**Cache de leitura de posts.** Cache-aside no Redis `(post:v1:{id}`, TTL de 10 minutos com variação de ±10% contra avalanche de expiração). Só leituras populam o cache, então ficam quentes apenas os posts realmente lidos; apagar um post invalida a chave. Decisões de autorização leem sempre do banco, e falhas do Redis caem para o Mongo. O contador `bafafa.post.cache (hit, miss, error)` permite medir a taxa de acerto. Listagens não são cacheadas.
 ## API
 
 Todas as rotas ficam sob `/api/v1`. Erros seguem o formato `ProblemDetail` (RFC 9457).
@@ -146,8 +152,8 @@ Uma configuração compartilhada de containers (`TestcontainersConfiguration`) p
 - [x] `profile`: perfil criado por evento, leitura pública e edição
 - [x] `post`: posts, respostas, paginação por cursor, exclusão lógica
 - [x] `ratelimit`: token bucket em Lua no Redis, aplicado a posts e respostas
-- [ ] Limite por IP em login e cadastro (configurável)
-- [ ] Cache de leitura de posts populares no Redis
+- [x] Limite por IP em login e cadastro (configurável)
+- [x] Cache de leitura de posts populares no Redis
 - [ ] *Outbox* para publicar eventos de posts com garantia (Mongo → eventos confiáveis)
 - [ ] Timeline: estudo de *fan-out on write* x *fan-out on read* e hidratação dos posts com dados do autor
 - [ ] Curtidas e reposts, com contadores fora do documento do post
@@ -163,7 +169,7 @@ Uma configuração compartilhada de containers (`TestcontainersConfiguration`) p
 - As respostas de posts trazem apenas o `authorId`; compor o post com os dados do autor é o problema de hidratação da timeline.
 - A configuração de segurança está centralizada no módulo `identity` e já conhece caminhos de outros módulos. Quando houver mais módulos, o ideal é movê-la para um módulo compartilhado.
 - Após o logout, o access token continua válido até expirar (no máximo 15 minutos), uma característica de JWT sem estado e o motivo de ele ser curto.
-
+- Entre apagar no Mongo e invalidar o Redis existe uma janela de milissegundos em que uma leitura pode ver a cópia antiga.
 ## Licença
 
 A definir.
