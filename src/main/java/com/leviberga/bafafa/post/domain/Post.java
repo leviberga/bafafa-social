@@ -14,7 +14,9 @@ import java.time.Instant;
 @Document(collection = "posts")
 @CompoundIndexes({
         @CompoundIndex(name = "author_newest", def = "{'authorId': 1, '_id': -1}"),
-        @CompoundIndex(name = "replies_oldest", def = "{'parentId': 1, '_id': 1}")
+        @CompoundIndex(name = "replies_oldest", def = "{'parentId': 1, '_id': 1}"),
+        @CompoundIndex(name = "repost_unique", def = "{'authorId': 1, 'repostOfId': 1}",
+                unique = true, partialFilter = "{ 'repostOfId': { '$exists': true } }")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -30,6 +32,7 @@ public class Post {
     private String text;
     private Instant createdAt;
     private Instant deletedAt;
+    private ObjectId repostOfId;
 
     public static Post create(String authorId, String text, Instant now) {
         Post post = new Post();
@@ -51,8 +54,16 @@ public class Post {
         post.createdAt = now;
         return post;
     }
+    public static Post repost(String authorId, Post original, Instant now) {
+        Post post = new Post();
+        post.authorId = authorId;
+        post.type = PostType.REPOST;
+        post.repostOfId = original.id;
+        post.createdAt = now;
+        return post;
+    }
     public static Post restore(ObjectId id, String authorId, PostType type, ObjectId parentId,
-                               ObjectId rootId, String text, Instant createdAt) {
+                               ObjectId rootId, String text, Instant createdAt, ObjectId repostOfId) {
         Post post = new Post();
         post.id = id;
         post.authorId = authorId;
@@ -61,6 +72,7 @@ public class Post {
         post.rootId = rootId;
         post.text = text;
         post.createdAt = createdAt;
+        post.repostOfId = repostOfId;
         return post;
     }
 

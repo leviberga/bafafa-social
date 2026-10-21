@@ -5,6 +5,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface PostRepository extends MongoRepository<Post, ObjectId> {
 
@@ -17,4 +18,10 @@ public interface PostRepository extends MongoRepository<Post, ObjectId> {
 
     List<Post> findByParentIdAndIdGreaterThanAndDeletedAtIsNullOrderByIdAsc(
             ObjectId parentId, ObjectId after, Limit limit);
+
+    Optional<Post> findByAuthorIdAndRepostOfId(String authorId, ObjectId repostOfId);
+
+    boolean existsByAuthorIdAndRepostOfId(String authorId, ObjectId repostOfId);
+
+    long deleteByAuthorIdAndRepostOfId(String authorId, ObjectId repostOfId);
 }

@@ -15,4 +15,6 @@ public class PostStats {
     private String postId;
 
     private long likeCount;
+
+    private long repostCount;
 }

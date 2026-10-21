@@ -17,7 +17,7 @@ final class PostDtos {
     }
 
     record PostResponse(String id, String authorId, String type, String parentId,
-                        String rootId, String text, Instant createdAt) {
+                        String rootId, String text, Instant createdAt, String repostOfId) {
 
         static PostResponse from(Post post) {
             return new PostResponse(
@@ -27,7 +27,8 @@ final class PostDtos {
                     post.getParentId() == null ? null : post.getParentId().toHexString(),
                     post.getRootId() == null ? null : post.getRootId().toHexString(),
                     post.getText(),
-                    post.getCreatedAt());
+                    post.getCreatedAt(),
+                    post.getRepostOfId() == null ? null : post.getRepostOfId().toHexString());
         }
     }
 

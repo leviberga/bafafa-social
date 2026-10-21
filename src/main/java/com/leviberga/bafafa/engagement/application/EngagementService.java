@@ -17,7 +17,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class LikeService {
+public class EngagementService {
 
     private static final RateLimitPolicy LIKE_POLICY = new RateLimitPolicy(60, Duration.ofMinutes(1));
 
@@ -27,7 +27,7 @@ public class LikeService {
     private final RateLimiter rateLimiter;
     private final Clock clock;
 
-    public record PostEngagement(long likeCount, boolean likedByMe) {
+    public record PostEngagement(long likeCount, long repostCount, boolean likedByMe, boolean repostedByMe) {
     }
 
     public void like(UUID userId, String rawPostId) {
@@ -53,9 +53,12 @@ public class LikeService {
 
     public PostEngagement get(String rawPostId, UUID viewerId) {
         String postId = visiblePostId(rawPostId);
-        long count = stats.findById(postId).map(PostStats::getLikeCount).orElse(0L);
+        PostStats postStats = stats.findById(postId).orElse(null);
+        long likeCount = postStats == null ? 0 : postStats.getLikeCount();
+        long repostCount = postStats == null ? 0 : postStats.getRepostCount();
         boolean likedByMe = viewerId != null && likes.existsByPostIdAndUserId(postId, viewerId.toString());
-        return new PostEngagement(count, likedByMe);
+        boolean repostedByMe = viewerId != null && posts.hasReposted(postId, viewerId.toString());
+        return new PostEngagement(likeCount, repostCount, likedByMe, repostedByMe);
     }
 
     private String visiblePostId(String rawPostId) {

@@ -1,16 +1,17 @@
 package com.leviberga.bafafa.engagement.web;
 
-import com.leviberga.bafafa.engagement.application.LikeService;
+import com.leviberga.bafafa.engagement.application.EngagementService;
 
 final class EngagementDtos {
 
     private EngagementDtos() {
     }
 
-    record EngagementResponse(long likeCount, boolean likedByMe) {
+    record EngagementResponse(long likeCount, long repostCount, boolean likedByMe, boolean repostedByMe) {
 
-        static EngagementResponse from(LikeService.PostEngagement engagement) {
-            return new EngagementResponse(engagement.likeCount(), engagement.likedByMe());
+        static EngagementResponse from(EngagementService.PostEngagement engagement) {
+            return new EngagementResponse(engagement.likeCount(), engagement.repostCount(),
+                    engagement.likedByMe(), engagement.repostedByMe());
         }
     }
 }

@@ -87,7 +87,7 @@ class RedisPostCache implements PostCache {
     }
 
     public record CachedPost(String id, String authorId, String type, String parentId,
-                             String rootId, String text, Instant createdAt) {
+                             String rootId, String text, Instant createdAt, String repostOfId) {
 
         static CachedPost from(Post post) {
             return new CachedPost(
@@ -97,7 +97,8 @@ class RedisPostCache implements PostCache {
                     post.getParentId() == null ? null : post.getParentId().toHexString(),
                     post.getRootId() == null ? null : post.getRootId().toHexString(),
                     post.getText(),
-                    post.getCreatedAt());
+                    post.getCreatedAt(),
+                    post.getRepostOfId() == null ? null : post.getRepostOfId().toHexString());
         }
 
         Post toPost() {
@@ -108,7 +109,8 @@ class RedisPostCache implements PostCache {
                     parentId == null ? null : new ObjectId(parentId),
                     rootId == null ? null : new ObjectId(rootId),
                     text,
-                    createdAt);
+                    createdAt,
+                    repostOfId == null ? null : new ObjectId(repostOfId));
         }
     }
 }

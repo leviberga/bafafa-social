@@ -28,4 +28,10 @@ class PostExceptionHandler {
     ProblemDetail invalidCursor() {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Cursor inválido.");
     }
+
+    @ExceptionHandler(PostErrors.NotInteractable.class)
+    ProblemDetail notInteractable() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Reposts não podem receber respostas nem ser repostados.");
+    }
 }

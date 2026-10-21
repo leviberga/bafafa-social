@@ -1,6 +1,6 @@
 package com.leviberga.bafafa.engagement.web;
 
-import com.leviberga.bafafa.engagement.application.LikeService;
+import com.leviberga.bafafa.engagement.application.EngagementService;
 import com.leviberga.bafafa.engagement.web.EngagementDtos.EngagementResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,9 +19,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/posts/{postId}")
 class EngagementController {
 
-    private final LikeService likes;
+    private final EngagementService likes;
 
-    EngagementController(LikeService likes) {
+    EngagementController(EngagementService likes) {
         this.likes = likes;
     }
 

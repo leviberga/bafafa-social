@@ -5,4 +5,6 @@ import java.util.Optional;
 public interface PostApi {
 
     Optional<String> resolveVisibleId(String rawPostId);
+
+    boolean hasReposted(String canonicalPostId, String userId);
 }

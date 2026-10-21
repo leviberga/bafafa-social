@@ -28,4 +28,9 @@ public final class PostErrors {
             super("Cursor inválido");
         }
     }
+    public static class NotInteractable extends RuntimeException {
+        public NotInteractable() {
+            super("Este post não aceita respostas nem reposts");
+        }
+    }
 }

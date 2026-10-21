@@ -2,12 +2,17 @@ package com.leviberga.bafafa.post.application;
 
 import com.leviberga.bafafa.identity.AccountSummary;
 import com.leviberga.bafafa.identity.IdentityApi;
+import com.leviberga.bafafa.post.PostReposted;
+import com.leviberga.bafafa.post.RepostRemoved;
 import com.leviberga.bafafa.post.domain.Post;
 import com.leviberga.bafafa.post.domain.PostRepository;
+import com.leviberga.bafafa.post.domain.PostType;
 import com.leviberga.bafafa.ratelimit.RateLimitPolicy;
 import com.leviberga.bafafa.ratelimit.RateLimiter;
+import org.springframework.dao.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +36,7 @@ public class PostService {
     private final Clock clock;
     private final RateLimiter rateLimiter;
     private final PostCache cache;
+    private final ApplicationEventPublisher events;
 
 
 
@@ -45,6 +51,9 @@ public class PostService {
     public Post reply(UUID authorId, String parentId, String text) {
         rateLimiter.acquire("post:reply:" + authorId, REPLY_POLICY);
         Post parent = findVisibleCached(parentId);
+        if (parent.getType() == PostType.REPOST) {
+            throw new PostErrors.NotInteractable();
+        }
         return posts.save(Post.reply(authorId.toString(), parent, text.trim(), clock.instant()));
     }
 
@@ -105,6 +114,41 @@ public class PostService {
         return posts.findById(id)
                 .filter(post -> post.getDeletedAt() == null)
                 .orElseThrow(PostErrors.PostNotFound::new);
+    }
+
+    private static final RateLimitPolicy REPOST_POLICY = new RateLimitPolicy(30, Duration.ofMinutes(1));
+
+    public Post repost(UUID userId, String originalId) {
+        rateLimiter.acquire("post:repost:" + userId, REPOST_POLICY);
+        Post original = findVisibleCached(originalId);
+        if (original.getType() == PostType.REPOST) {
+            throw new PostErrors.NotInteractable();
+        }
+
+        String author = userId.toString();
+        try {
+            Post repost = posts.insert(Post.repost(author, original, clock.instant()));
+            events.publishEvent(new PostReposted(original.getId().toHexString(), repost.getId().toHexString(), author));
+            return repost;
+        } catch (DuplicateKeyException e) {
+            return posts.findByAuthorIdAndRepostOfId(author, original.getId())
+                    .orElseThrow(PostErrors.PostNotFound::new);
+        }
+    }
+
+    public void unrepost(UUID userId, String originalId) {
+        ObjectId original = parseObjectId(originalId);
+        String author = userId.toString();
+        posts.findByAuthorIdAndRepostOfId(author, original).ifPresent(repost -> {
+            if (posts.deleteByAuthorIdAndRepostOfId(author, original) > 0) {
+                cache.evict(repost.getId());
+                events.publishEvent(new RepostRemoved(original.toHexString(), repost.getId().toHexString(), author));
+            }
+        });
+    }
+
+    public boolean hasReposted(String canonicalPostId, String userId) {
+        return posts.existsByAuthorIdAndRepostOfId(userId, new ObjectId(canonicalPostId));
     }
 
     private static PostPage toPage(List<Post> found, int size) {
