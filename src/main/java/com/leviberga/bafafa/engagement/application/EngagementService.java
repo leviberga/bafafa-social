@@ -1,9 +1,13 @@
 package com.leviberga.bafafa.engagement.application;
 
+import com.leviberga.bafafa.engagement.PostLiked;
+import com.leviberga.bafafa.engagement.PostUnliked;
 import com.leviberga.bafafa.engagement.domain.Like;
 import com.leviberga.bafafa.engagement.domain.LikeRepository;
 import com.leviberga.bafafa.engagement.domain.PostStats;
 import com.leviberga.bafafa.engagement.domain.PostStatsRepository;
+import com.leviberga.bafafa.outbox.MongoTransactions;
+import com.leviberga.bafafa.outbox.Outbox;
 import com.leviberga.bafafa.post.PostApi;
 import com.leviberga.bafafa.ratelimit.RateLimitPolicy;
 import com.leviberga.bafafa.ratelimit.RateLimiter;
@@ -26,6 +30,8 @@ public class EngagementService {
     private final PostApi posts;
     private final RateLimiter rateLimiter;
     private final Clock clock;
+    private final Outbox outbox;
+    private final MongoTransactions mongoTx;
 
     public record PostEngagement(long likeCount, long repostCount, boolean likedByMe, boolean repostedByMe) {
     }
@@ -33,29 +39,37 @@ public class EngagementService {
     public void like(UUID userId, String rawPostId) {
         rateLimiter.acquire("engagement:like:" + userId, LIKE_POLICY);
         String postId = visiblePostId(rawPostId);
+        String user = userId.toString();
 
         try {
-            likes.insert(Like.of(postId, userId.toString(), clock.instant()));
+            mongoTx.run(() -> {
+                if (likes.existsByPostIdAndUserId(postId, user)) {
+                    return;
+                }
+                Like like = likes.insert(Like.of(postId, user, clock.instant()));
+                outbox.append(new PostLiked(like.getId().toHexString(), postId, user));
+            });
         } catch (DuplicateKeyException e) {
-            return; // já curtido: a operação é idempotente e o contador não mexe
         }
-        stats.incrementLikes(postId);
     }
 
     public void unlike(UUID userId, String rawPostId) {
         rateLimiter.acquire("engagement:like:" + userId, LIKE_POLICY);
         String postId = visiblePostId(rawPostId);
+        String user = userId.toString();
 
-        if (likes.deleteByPostIdAndUserId(postId, userId.toString()) > 0) {
-            stats.decrementLikes(postId);
-        }
+        mongoTx.run(() -> likes.findByPostIdAndUserId(postId, user).ifPresent(like -> {
+            if (likes.deleteByPostIdAndUserId(postId, user) > 0) {
+                outbox.append(new PostUnliked(like.getId().toHexString(), postId, user));
+            }
+        }));
     }
 
     public PostEngagement get(String rawPostId, UUID viewerId) {
         String postId = visiblePostId(rawPostId);
         PostStats postStats = stats.findById(postId).orElse(null);
-        long likeCount = postStats == null ? 0 : postStats.getLikeCount();
-        long repostCount = postStats == null ? 0 : postStats.getRepostCount();
+        long likeCount = postStats == null ? 0 : postStats.likeCountOrZero();
+        long repostCount = postStats == null ? 0 : postStats.repostCountOrZero();
         boolean likedByMe = viewerId != null && likes.existsByPostIdAndUserId(postId, viewerId.toString());
         boolean repostedByMe = viewerId != null && posts.hasReposted(postId, viewerId.toString());
         return new PostEngagement(likeCount, repostCount, likedByMe, repostedByMe);

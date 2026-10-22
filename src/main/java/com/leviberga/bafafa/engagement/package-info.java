@@ -1,2 +1,2 @@
-@org.springframework.modulith.ApplicationModule(allowedDependencies = {"post", "ratelimit"})
+@org.springframework.modulith.ApplicationModule(allowedDependencies = {"post", "ratelimit", "outbox"})
 package com.leviberga.bafafa.engagement;

@@ -1,4 +1,6 @@
 package com.leviberga.bafafa.post;
 
-public record RepostRemoved(String originalPostId, String repostId, String userId) {
+import com.leviberga.bafafa.outbox.OutboxEvent;
+
+public record RepostRemoved(String originalPostId, String repostId, String userId) implements OutboxEvent {
 }

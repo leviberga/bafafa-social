@@ -2,6 +2,8 @@ package com.leviberga.bafafa.post.application;
 
 import com.leviberga.bafafa.identity.AccountSummary;
 import com.leviberga.bafafa.identity.IdentityApi;
+import com.leviberga.bafafa.outbox.MongoTransactions;
+import com.leviberga.bafafa.outbox.Outbox;
 import com.leviberga.bafafa.post.PostReposted;
 import com.leviberga.bafafa.post.RepostRemoved;
 import com.leviberga.bafafa.post.domain.Post;
@@ -12,7 +14,6 @@ import com.leviberga.bafafa.ratelimit.RateLimiter;
 import org.springframework.dao.DuplicateKeyException;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +21,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -36,7 +38,8 @@ public class PostService {
     private final Clock clock;
     private final RateLimiter rateLimiter;
     private final PostCache cache;
-    private final ApplicationEventPublisher events;
+    private final Outbox outbox;
+    private final MongoTransactions mongoTx;
 
 
 
@@ -127,9 +130,15 @@ public class PostService {
 
         String author = userId.toString();
         try {
-            Post repost = posts.insert(Post.repost(author, original, clock.instant()));
-            events.publishEvent(new PostReposted(original.getId().toHexString(), repost.getId().toHexString(), author));
-            return repost;
+            return mongoTx.execute(() -> {
+                Optional<Post> existing = posts.findByAuthorIdAndRepostOfId(author, original.getId());
+                if (existing.isPresent()) {
+                    return existing.get(); // idempotente
+                }
+                Post repost = posts.insert(Post.repost(author, original, clock.instant()));
+                outbox.append(new PostReposted(original.getId().toHexString(), repost.getId().toHexString(), author));
+                return repost;
+            });
         } catch (DuplicateKeyException e) {
             return posts.findByAuthorIdAndRepostOfId(author, original.getId())
                     .orElseThrow(PostErrors.PostNotFound::new);
@@ -139,12 +148,17 @@ public class PostService {
     public void unrepost(UUID userId, String originalId) {
         ObjectId original = parseObjectId(originalId);
         String author = userId.toString();
-        posts.findByAuthorIdAndRepostOfId(author, original).ifPresent(repost -> {
-            if (posts.deleteByAuthorIdAndRepostOfId(author, original) > 0) {
-                cache.evict(repost.getId());
-                events.publishEvent(new RepostRemoved(original.toHexString(), repost.getId().toHexString(), author));
-            }
-        });
+
+        Optional<ObjectId> removed = mongoTx.execute(() ->
+                posts.findByAuthorIdAndRepostOfId(author, original).flatMap(repost -> {
+                    if (posts.deleteByAuthorIdAndRepostOfId(author, original) == 0) {
+                        return Optional.<ObjectId>empty();
+                    }
+                    outbox.append(new RepostRemoved(original.toHexString(), repost.getId().toHexString(), author));
+                    return Optional.of(repost.getId());
+                }));
+
+        removed.ifPresent(cache::evict);
     }
 
     public boolean hasReposted(String canonicalPostId, String userId) {

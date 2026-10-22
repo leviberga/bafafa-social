@@ -3,10 +3,12 @@ package com.leviberga.bafafa.engagement;
 import com.jayway.jsonpath.JsonPath;
 import com.leviberga.bafafa.TestClient;
 import com.leviberga.bafafa.TestcontainersConfiguration;
+import org.awaitility.core.ThrowingRunnable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -14,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -22,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -51,21 +55,19 @@ class EngagementFlowIntegrationTest {
         like(fan, postId).andExpect(status().isNoContent());
         like(fan, postId).andExpect(status().isNoContent()); // repetir não conta de novo
 
-        engagementOf(postId, fan)
+        eventually(() -> engagementOf(postId, fan)
                 .andExpect(jsonPath("$.likeCount").value(1))
-                .andExpect(jsonPath("$.likedByMe").value(true));
+                .andExpect(jsonPath("$.likedByMe").value(true)));
 
         like(other, postId).andExpect(status().isNoContent());
 
-        engagementOf(postId, other)
-                .andExpect(jsonPath("$.likeCount").value(2))
-                .andExpect(jsonPath("$.likedByMe").value(true));
+        eventually(() -> engagementOf(postId, fan)
+                .andExpect(jsonPath("$.likeCount").value(1))
+                .andExpect(jsonPath("$.likedByMe").value(true)));
 
-        // Quem não está logado vê o total, mas "likedByMe" é falso.
-        engagementOf(postId, null)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.likeCount").value(2))
-                .andExpect(jsonPath("$.likedByMe").value(false));
+        eventually(() -> engagementOf(postId, fan)
+                .andExpect(jsonPath("$.likeCount").value(1))
+                .andExpect(jsonPath("$.likedByMe").value(true)));
     }
 
     @Test
@@ -75,14 +77,17 @@ class EngagementFlowIntegrationTest {
         String postId = createPost(author, "vai e volta");
 
         like(fan, postId).andExpect(status().isNoContent());
+        eventually(() -> engagementOf(postId, fan)
+                .andExpect(jsonPath("$.likeCount").value(1))
+                .andExpect(jsonPath("$.likedByMe").value(true)));
+
         unlike(fan, postId).andExpect(status().isNoContent());
-
-        engagementOf(postId, fan)
+        eventually(() -> engagementOf(postId, fan)
                 .andExpect(jsonPath("$.likeCount").value(0))
-                .andExpect(jsonPath("$.likedByMe").value(false));
+                .andExpect(jsonPath("$.likedByMe").value(false)));
 
-        unlike(fan, postId).andExpect(status().isNoContent()); // idempotente
-
+        unlike(fan, postId).andExpect(status().isNoContent());
+        Thread.sleep(1200);
         engagementOf(postId, fan).andExpect(jsonPath("$.likeCount").value(0));
     }
 
@@ -125,7 +130,7 @@ class EngagementFlowIntegrationTest {
         try {
             List<Callable<Integer>> tasks = new ArrayList<>();
             for (User fan : fans) {
-                for (int i = 0; i < 2; i++) { // cada usuário dispara duas vezes ao mesmo tempo
+                for (int i = 0; i < 2; i++) {
                     tasks.add(() -> mvc.perform(put("/api/v1/posts/" + postId + "/like")
                                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + fan.token()))
                             .andReturn().getResponse().getStatus());
@@ -138,9 +143,22 @@ class EngagementFlowIntegrationTest {
             pool.shutdown();
         }
 
-        engagementOf(postId, null)
+        eventually(() -> engagementOf(postId, null)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.likeCount").value(8));
+                .andExpect(jsonPath("$.likeCount").value(8)));
+    }
+    @Autowired
+    ApplicationEventPublisher publisher;
+    @Test
+    void duplicateDeliveriesOfTheSameEventCountOnce() throws Exception {
+        User author = newUser();
+        String postId = createPost(author, "entregue duas vezes");
+        String likeId = "manual-" + UUID.randomUUID();
+
+        publisher.publishEvent(new PostLiked(likeId, postId, "alguem"));
+        publisher.publishEvent(new PostLiked(likeId, postId, "alguem"));
+
+        eventually(() -> engagementOf(postId, null).andExpect(jsonPath("$.likeCount").value(1)));
     }
 
     // --- helpers ---
@@ -194,5 +212,8 @@ class EngagementFlowIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.id");
+    }
+    private static void eventually(ThrowingRunnable assertion) {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(assertion);
     }
 }

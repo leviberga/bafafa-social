@@ -17,4 +17,12 @@ public class PostStats {
     private long likeCount;
 
     private long repostCount;
+
+    public long likeCountOrZero() {
+        return Math.max(0, likeCount);
+    }
+
+    public long repostCountOrZero() {
+        return Math.max(0, repostCount);
+    }
 }

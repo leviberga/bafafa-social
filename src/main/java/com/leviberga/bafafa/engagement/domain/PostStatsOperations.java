@@ -2,11 +2,7 @@ package com.leviberga.bafafa.engagement.domain;
 
 public interface PostStatsOperations {
 
-    void incrementLikes(String postId);
+    void adjustLikes(String postId, int delta);
 
-    void decrementLikes(String postId);
-
-    void incrementReposts(String postId);
-
-    void decrementReposts(String postId);
+    void adjustReposts(String postId, int delta);
 }

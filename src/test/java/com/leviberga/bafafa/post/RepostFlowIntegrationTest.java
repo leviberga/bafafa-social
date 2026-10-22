@@ -4,6 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import com.leviberga.bafafa.TestApi;
 import com.leviberga.bafafa.TestApi.User;
 import com.leviberga.bafafa.TestcontainersConfiguration;
+import org.awaitility.core.ThrowingRunnable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -24,6 +26,7 @@ import java.util.concurrent.Future;
 
 import static com.leviberga.bafafa.TestApi.createPost;
 import static com.leviberga.bafafa.TestApi.newUser;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -64,9 +67,9 @@ class RepostFlowIntegrationTest {
                 .andExpect(jsonPath("$.items[0].type").value("REPOST"))
                 .andExpect(jsonPath("$.items[0].repostOfId").value(originalId));
 
-        engagementOf(originalId, reposter)
+        eventually(() -> engagementOf(originalId, reposter)
                 .andExpect(jsonPath("$.repostCount").value(1))
-                .andExpect(jsonPath("$.repostedByMe").value(true));
+                .andExpect(jsonPath("$.repostedByMe").value(true)));
         engagementOf(originalId, author)
                 .andExpect(jsonPath("$.repostedByMe").value(false));
     }
@@ -78,18 +81,21 @@ class RepostFlowIntegrationTest {
         String originalId = createPost(mvc, author, "vai e volta");
 
         repost(reposter, originalId).andExpect(status().isOk());
+        eventually(() -> engagementOf(originalId, reposter)
+                .andExpect(jsonPath("$.repostCount").value(1)));
+
         unrepost(reposter, originalId).andExpect(status().isNoContent());
         unrepost(reposter, originalId).andExpect(status().isNoContent()); // idempotente
 
         mvc.perform(get("/api/v1/posts").param("author", reposter.handle()))
                 .andExpect(jsonPath("$.items.length()").value(0));
-        engagementOf(originalId, reposter)
+        eventually(() -> engagementOf(originalId, reposter)
                 .andExpect(jsonPath("$.repostCount").value(0))
-                .andExpect(jsonPath("$.repostedByMe").value(false));
+                .andExpect(jsonPath("$.repostedByMe").value(false)));
 
-        // A vaga foi liberada: dá para repostar de novo.
         repost(reposter, originalId).andExpect(status().isOk());
-        engagementOf(originalId, reposter).andExpect(jsonPath("$.repostCount").value(1));
+        eventually(() -> engagementOf(originalId, reposter)
+                .andExpect(jsonPath("$.repostCount").value(1)));
     }
 
     @Test
@@ -145,7 +151,9 @@ class RepostFlowIntegrationTest {
 
         mvc.perform(get("/api/v1/posts").param("author", reposter.handle()))
                 .andExpect(jsonPath("$.items.length()").value(1));
-        engagementOf(originalId, null).andExpect(jsonPath("$.repostCount").value(1));
+
+        eventually(() -> engagementOf(originalId, null)
+                .andExpect(jsonPath("$.repostCount").value(1)));
     }
 
     // --- helpers ---
@@ -166,5 +174,8 @@ class RepostFlowIntegrationTest {
             request.header(HttpHeaders.AUTHORIZATION, viewer.bearer());
         }
         return mvc.perform(request);
+    }
+    private static void eventually(ThrowingRunnable assertion) {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(assertion);
     }
 }

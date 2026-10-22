@@ -14,36 +14,19 @@ class PostStatsOperationsImpl implements PostStatsOperations {
     }
 
     @Override
-    public void incrementLikes(String postId) {
-        increment(postId, "likeCount");
+    public void adjustLikes(String postId, int delta) {
+        adjust(postId, "likeCount", delta);
     }
 
     @Override
-    public void decrementLikes(String postId) {
-        decrement(postId, "likeCount");
+    public void adjustReposts(String postId, int delta) {
+        adjust(postId, "repostCount", delta);
     }
 
-    @Override
-    public void incrementReposts(String postId) {
-        increment(postId, "repostCount");
-    }
-
-    @Override
-    public void decrementReposts(String postId) {
-        decrement(postId, "repostCount");
-    }
-
-    private void increment(String postId, String field) {
+    private void adjust(String postId, String field, int delta) {
         mongo.upsert(
                 Query.query(Criteria.where("_id").is(postId)),
-                new Update().inc(field, 1),
-                PostStats.class);
-    }
-
-    private void decrement(String postId, String field) {
-        mongo.updateFirst(
-                Query.query(Criteria.where("_id").is(postId).and(field).gt(0)),
-                new Update().inc(field, -1),
+                new Update().inc(field, delta),
                 PostStats.class);
     }
 }
