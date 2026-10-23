@@ -4,6 +4,7 @@ import org.bson.types.ObjectId;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,14 @@ public interface PostRepository extends MongoRepository<Post, ObjectId> {
 
     List<Post> findByAuthorIdAndIdLessThanAndDeletedAtIsNullOrderByIdDesc(
             String authorId, ObjectId before, Limit limit);
+
+    List<Post> findByAuthorIdInAndTypeInAndDeletedAtIsNullOrderByIdDesc(
+            Collection<String> authorIds, Collection<PostType> types, Limit limit);
+
+    List<Post> findByAuthorIdInAndTypeInAndIdLessThanAndDeletedAtIsNullOrderByIdDesc(
+            Collection<String> authorIds, Collection<PostType> types, ObjectId before, Limit limit);
+
+    List<Post> findByAuthorIdAndRepostOfIdIn(String authorId, Collection<ObjectId> originals);
 
     List<Post> findByParentIdAndDeletedAtIsNullOrderByIdAsc(ObjectId parentId, Limit limit);
 
