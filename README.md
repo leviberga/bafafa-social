@@ -2,8 +2,7 @@
 
 Rede social brasileira no estilo microblog, construída como projeto de estudo e portfólio: um **monolito modular** em Java com Spring Boot, com fronteiras claras entre módulos desde o primeiro dia e decisões documentadas, para que cada parte possa evoluir (ou ser extraída para um serviço) com base em medição.
 
-> **Status:** em desenvolvimento. O backend cobre autenticação, perfis, posts com respostas, curtidas, reposts, grafo de seguidores e feed (timeline), com rate limiting, cache e entrega confiável de eventos (outbox). O front-end e a busca estão no [roadmap](#roadmap).
-
+> **Status:** em desenvolvimento. O backend cobre autenticação, perfis, posts com respostas, curtidas, reposts, grafo de seguidores e feed (timeline), com rate limiting, cache e entrega confiável de eventos (outbox). O front-end está em [bafafa-web](https://github.com/leviberga/bafafa-web) e a busca está no [roadmap](#roadmap).
 ## Por que existe
 
 Dois objetivos: aprender e exercitar arquitetura de backend num problema real e conhecido (feed, grafo social, cache, filas, consistência entre armazenamentos), e ter um bom projeto de portfólio. Há também uma motivação de fundo: com o tema de soberania digital em alta, vale ter alternativas nacionais de redes sociais, sujeitas à legislação brasileira.
