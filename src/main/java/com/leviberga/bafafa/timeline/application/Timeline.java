@@ -22,4 +22,10 @@ public final class Timeline {
 
     public record Engagement(long likeCount, long repostCount, boolean likedByMe, boolean repostedByMe) {
     }
+
+    public record PostThread(PostCard post, ReplyContext inReplyTo) {
+    }
+
+    public record ReplyContext(String postId, Actor author) {
+    }
 }

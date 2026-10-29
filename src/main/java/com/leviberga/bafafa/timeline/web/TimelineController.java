@@ -29,12 +29,27 @@ class TimelineController {
         return timeline.home(UUID.fromString(jwt.getSubject()), cursor, limit);
     }
 
-    /** Público. Se vier um token válido, os campos "likedByMe" e "repostedByMe" refletem o usuário. */
     @GetMapping("/users/{handle}")
     Timeline.Page ofUser(@AuthenticationPrincipal Jwt jwt, @PathVariable String handle,
                          @RequestParam(required = false) String cursor,
                          @RequestParam(defaultValue = "20") int limit) {
         UUID viewerId = jwt == null ? null : UUID.fromString(jwt.getSubject());
         return timeline.ofUser(handle, viewerId, cursor, limit);
+    }
+
+    @GetMapping("/posts/{id}")
+    Timeline.PostThread post(@AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+        return timeline.thread(id, viewerId(jwt));
+    }
+
+    @GetMapping("/posts/{id}/replies")
+    Timeline.Page replies(@AuthenticationPrincipal Jwt jwt, @PathVariable String id,
+                          @RequestParam(required = false) String cursor,
+                          @RequestParam(defaultValue = "20") int limit) {
+        return timeline.replies(id, viewerId(jwt), cursor, limit);
+    }
+
+    private static UUID viewerId(Jwt jwt) {
+        return jwt == null ? null : UUID.fromString(jwt.getSubject());
     }
 }

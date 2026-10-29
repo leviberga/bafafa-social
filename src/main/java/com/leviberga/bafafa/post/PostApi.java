@@ -13,4 +13,6 @@ public interface PostApi {
     Map<String, PostView> findVisibleByIds(Collection<String> postIds);
 
     Set<String> repostedAmong(String userId, Collection<String> originalPostIds);
+
+    PostViewPage listReplies(String postId, String cursor, int limit);
 }

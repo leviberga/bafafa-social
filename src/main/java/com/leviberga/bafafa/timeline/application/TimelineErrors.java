@@ -10,4 +10,10 @@ public final class TimelineErrors {
             super("Perfil não encontrado");
         }
     }
+
+    public static class PostNotFound extends RuntimeException {
+        public PostNotFound() {
+            super("Post não encontrado");
+        }
+    }
 }

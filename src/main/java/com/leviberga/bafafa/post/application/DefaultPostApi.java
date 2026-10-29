@@ -2,6 +2,7 @@ package com.leviberga.bafafa.post.application;
 
 import com.leviberga.bafafa.post.PostApi;
 import com.leviberga.bafafa.post.PostView;
+import com.leviberga.bafafa.post.PostViewPage;
 import com.leviberga.bafafa.post.domain.Post;
 import com.leviberga.bafafa.post.domain.PostRepository;
 import com.leviberga.bafafa.post.domain.PostType;
@@ -76,6 +77,12 @@ class DefaultPostApi implements PostApi {
         return repository.findByAuthorIdAndRepostOfIdIn(userId, ids).stream()
                 .map(repost -> repost.getRepostOfId().toHexString())
                 .collect(Collectors.toSet());
+    }
+
+    @Override
+    public PostViewPage listReplies(String postId, String cursor, int limit) {
+        PostService.PostPage page = posts.listReplies(postId, cursor, limit);
+        return new PostViewPage(page.items().stream().map(DefaultPostApi::toView).toList(), page.nextCursor());
     }
 
     private static ObjectId parseCursor(String cursor) {

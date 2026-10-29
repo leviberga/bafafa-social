@@ -13,4 +13,9 @@ class TimelineExceptionHandler {
     ProblemDetail authorNotFound() {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Perfil não encontrado.");
     }
+
+    @ExceptionHandler(TimelineErrors.PostNotFound.class)
+    ProblemDetail postNotFound() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Post não encontrado.");
+    }
 }

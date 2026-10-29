@@ -51,7 +51,10 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/posts", "/api/v1/posts/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/profiles/*/follow-stats",
-                                "/api/v1/timeline/users/*").permitAll()
+                                "/api/v1/timeline/users/*",
+                                "/api/v1/timeline/posts/*",
+                                "/api/v1/timeline/posts/*/replies").permitAll()
+
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
         return http.build();
